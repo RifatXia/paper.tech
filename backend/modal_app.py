@@ -1,7 +1,9 @@
 """Modal app — deploys Qwen3 (vLLM) and MiniLM embeddings as HTTPS endpoints.
 
-Uses Modal Volumes to cache model weights — first deploy downloads them once,
-subsequent cold starts load from the volume instead of re-downloading.
+Uses:
+  - Modal Volumes to cache HuggingFace model weights (no re-download)
+  - GPU memory snapshots to snapshot the loaded model in GPU memory
+    (cold starts restore from snapshot instead of re-loading weights)
 
 Usage:
     cd backend
@@ -20,8 +22,6 @@ import modal
 app = modal.App("paper-tech")
 
 # Persistent volume for HuggingFace model weights cache.
-# First cold start downloads weights here; all future cold starts
-# load from the volume (~seconds instead of ~minutes).
 hf_cache_vol = modal.Volume.from_name("paper-tech-hf-cache", create_if_missing=True)
 HF_CACHE_DIR = "/root/.cache/huggingface"
 
@@ -54,19 +54,32 @@ EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
     timeout=300,
     scaledown_window=120,
     volumes={HF_CACHE_DIR: hf_cache_vol},
+    enable_memory_snapshot=True,
+    experimental_options={"enable_gpu_snapshot": True},
 )
 @modal.concurrent(max_inputs=10)
 class LLMServer:
-    @modal.enter()
+    @modal.enter(snap=True)
     def load_model(self):
-        from vllm import LLM
+        """Load model into GPU and snapshot the state.
+
+        This runs once during snapshot creation. On subsequent cold starts,
+        the container restores directly from the GPU memory snapshot —
+        skipping model download AND GPU loading entirely.
+        """
+        from vllm import LLM, SamplingParams
+
         self.llm = LLM(
             model=LLM_MODEL,
             trust_remote_code=True,
             enable_prefix_caching=True,
         )
-        # Commit any newly downloaded weights to the volume so
-        # the next cold start doesn't re-download them.
+        # Warm up with a sample forward pass so CUDA kernels are compiled
+        # and included in the snapshot.
+        self.llm.generate(
+            ["<|im_start|>user\nwarmup<|im_end|>\n<|im_start|>assistant\n"],
+            SamplingParams(max_tokens=1),
+        )
         hf_cache_vol.commit()
 
     @modal.fastapi_endpoint(method="POST", docs=True)
@@ -117,12 +130,18 @@ class LLMServer:
     timeout=120,
     scaledown_window=120,
     volumes={HF_CACHE_DIR: hf_cache_vol},
+    enable_memory_snapshot=True,
+    experimental_options={"enable_gpu_snapshot": True},
 )
 class EmbedServer:
-    @modal.enter()
+    @modal.enter(snap=True)
     def load_model(self):
+        """Load embedding model and snapshot GPU state."""
         from sentence_transformers import SentenceTransformer
+
         self.model = SentenceTransformer(EMBED_MODEL)
+        # Warm up with a sample encoding
+        self.model.encode(["warmup"], normalize_embeddings=True)
         hf_cache_vol.commit()
 
     @modal.fastapi_endpoint(method="POST", docs=True)
