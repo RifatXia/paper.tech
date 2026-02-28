@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-gradient-cyan {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-cyan-600;
+  }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(0, 212, 219, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 212, 219, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 hover:border-cyan-500/30 hover:shadow-lg hover:shadow-cyan-500/5;
+  }
+}
+
+/* Dark scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0f1e;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3450;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4a60;
+}
+
+body {
+  scrollbar-color: #2a3450 #0a0f1e;
+}
