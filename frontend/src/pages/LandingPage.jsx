@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchBar from "../components/SearchBar";
+import GeoFilter from "../components/GeoFilter";
 
 const EXAMPLE_QUERIES = [
   "KV cache compression for multi-turn LLM inference",
@@ -14,10 +16,6 @@ const FEATURES = [
     desc: "Composite scoring: topic overlap, semantic similarity, and citation graph analysis.",
   },
   {
-    title: "Geo Filter",
-    desc: "Find collaborators at your university, city, state, or country.",
-  },
-  {
     title: "Multi-Scholar Chat",
     desc: "Handpick scholars and explore collaboration ideas with AI-powered context.",
   },
@@ -27,11 +25,14 @@ const FEATURES = [
   },
 ];
 
+const EMPTY_FILTER = { country: null, state: null, university: null };
+
 export default function LandingPage() {
   const navigate = useNavigate();
+  const [geoFilter, setGeoFilter] = useState(EMPTY_FILTER);
 
   const handleSearch = (query) => {
-    navigate(`/results?q=${encodeURIComponent(query)}`);
+    navigate(`/results?q=${encodeURIComponent(query)}`, { state: { geoFilter } });
   };
 
   return (
@@ -48,8 +49,12 @@ export default function LandingPage() {
 
       <SearchBar onSearch={handleSearch} />
 
+      <div className="mt-4 w-full max-w-2xl flex justify-center">
+        <GeoFilter filter={geoFilter} onChange={setGeoFilter} />
+      </div>
+
       {/* Example queries */}
-      <div className="mt-6 flex flex-wrap gap-2 justify-center max-w-2xl">
+      <div className="mt-4 flex flex-wrap gap-2 justify-center max-w-2xl">
         {EXAMPLE_QUERIES.map((q) => (
           <button
             key={q}
@@ -62,7 +67,7 @@ export default function LandingPage() {
       </div>
 
       {/* Feature cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-20 max-w-5xl w-full mb-20">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-20 max-w-3xl w-full mb-20">
         {FEATURES.map((f) => (
           <div
             key={f.title}
