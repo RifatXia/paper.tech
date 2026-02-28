@@ -95,7 +95,8 @@ async def main():
         os.makedirs("data", exist_ok=True)
         edges_path = "data/co_citation_edges.json"
         if not os.path.exists(edges_path):
-            json.dump([], open(edges_path, "w"))
+            with open(edges_path, "w") as f:
+                json.dump([], f)
             print("✅ co_citation_edges.json initialized")
 
         print("\n✅ Schema ready")
