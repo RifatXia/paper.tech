@@ -1,7 +1,5 @@
 import asyncio
 import sys
-import uuid
-import numpy as np
 from cortex import AsyncCortexClient, DistanceMetric
 
 # Configuration
