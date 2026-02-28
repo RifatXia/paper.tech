@@ -1,16 +1,13 @@
-"""Supermemory integration — two clients:
+"""Supermemory + Modal integration:
 
-1. `memory` (Supermemory SDK)  — add/search documents and memories
-2. `llm`    (OpenAI SDK proxy) — chat through Memory Router for auto context
-
-Both are None when the required env vars are missing, and every caller
-falls back to mock data in that case.
+1. `memory` (Supermemory SDK) — add/search documents, manage context
+2. `call_llm()` — calls Modal LLM with Supermemory context injected
+3. Helpers for scholar/session document management
 """
 
 import logging
-from urllib.parse import quote
 
-from openai import OpenAI
+import httpx
 from supermemory import Supermemory
 
 from app.config import settings
@@ -28,38 +25,105 @@ else:
     log.warning("SUPERMEMORY_KEY not set — memory features disabled, using mock data")
 
 
-# ── Memory Router (OpenAI-compatible proxy for chat) ───────────
+# ── LLM call with Supermemory context ──────────────────────────
 
-def get_chat_client(user_id: str, conversation_id: str) -> OpenAI | None:
-    """Create an OpenAI client that routes through Supermemory's Memory Router.
+async def call_llm(
+    messages: list[dict],
+    session_id: str | None = None,
+    max_tokens: int = 1024,
+    temperature: float = 0.7,
+) -> str | None:
+    """Call Modal LLM endpoint with Supermemory context injected.
 
-    The Memory Router sits between us and the LLM endpoint (Modal).
-    It automatically:
-      - stores conversation history per conversation_id
-      - retrieves relevant memories and injects them as context
-      - forwards the augmented request to the LLM
-      - asynchronously creates new memories from the response
+    1. Searches Supermemory for relevant memories based on the last user message
+    2. Prepends retrieved context to the system prompt
+    3. Calls Modal LLM directly via HTTP
+    4. Stores the exchange back in Supermemory for future context
 
-    Returns None if required env vars are missing.
+    Returns the LLM response text, or None if Modal isn't configured.
     """
-    if not settings.supermemory_key or not settings.modal_llm_endpoint:
+    if not settings.modal_llm_endpoint:
         return None
 
-    # The Memory Router base_url format embeds the downstream LLM URL.
-    # e.g. if modal_llm_endpoint = "https://user--app.modal.run"
-    # then base_url = "https://api.supermemory.ai/v3/https://user--app.modal.run/v1"
-    endpoint = settings.modal_llm_endpoint.rstrip("/")
-    base_url = f"https://api.supermemory.ai/v3/{endpoint}/v1"
-
-    return OpenAI(
-        api_key="unused",  # Modal endpoints don't need an OpenAI key
-        base_url=base_url,
-        default_headers={
-            "x-supermemory-api-key": settings.supermemory_key,
-            "x-sm-user-id": user_id,
-            "x-sm-conversation-id": conversation_id,
-        },
+    # Extract the user's message for context retrieval
+    user_msg = next(
+        (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
     )
+
+    # Retrieve relevant context from Supermemory
+    context_chunks = []
+    if memory and user_msg:
+        try:
+            search_kwargs = {"q": user_msg, "limit": 5}
+            if session_id:
+                search_kwargs["container_tags"] = [f"session-{session_id}", "scholars"]
+            result = memory.search.execute(**search_kwargs)
+            context_chunks = [
+                r.content for r in (result.results or []) if r.content
+            ]
+        except Exception:
+            log.exception("Supermemory search failed, proceeding without context")
+
+    # Inject retrieved context into system message
+    if context_chunks:
+        context_block = (
+            "Relevant context from memory:\n---\n"
+            + "\n---\n".join(context_chunks)
+            + "\n---\n\n"
+        )
+        # Prepend to existing system message or add one
+        if messages and messages[0]["role"] == "system":
+            messages = [
+                {"role": "system", "content": context_block + messages[0]["content"]},
+                *messages[1:],
+            ]
+        else:
+            messages = [
+                {"role": "system", "content": context_block},
+                *messages,
+            ]
+
+    # Add instruction to suppress thinking tags
+    think_instruction = "Respond directly without <think> tags. Be concise and helpful."
+    if messages and messages[0]["role"] == "system":
+        messages[0]["content"] += f"\n\n{think_instruction}"
+    else:
+        messages = [{"role": "system", "content": think_instruction}, *messages]
+
+    # Call Modal LLM endpoint directly
+    payload = {
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+
+    async with httpx.AsyncClient(timeout=300) as client:
+        resp = await client.post(
+            settings.modal_llm_endpoint,
+            json=payload,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    reply = data["choices"][0]["message"]["content"]
+
+    # Strip any <think>...</think> blocks the model might still produce
+    if "<think>" in reply:
+        import re
+        reply = re.sub(r"<think>.*?</think>", "", reply, flags=re.DOTALL).strip()
+
+    # Store the exchange in Supermemory for future context
+    if memory and session_id:
+        try:
+            memory.documents.add(
+                content=f"User: {user_msg}\nAssistant: {reply}",
+                container_tag=f"session-{session_id}",
+                metadata={"type": "chat", "session_id": session_id},
+            )
+        except Exception:
+            log.exception("Failed to store chat exchange in Supermemory")
+
+    return reply
 
 
 # ── Helpers ────────────────────────────────────────────────────
@@ -71,10 +135,7 @@ async def add_scholar_to_memory(
     topics: list[str],
     container_tag: str = "scholars",
 ) -> str | None:
-    """Add a scholar profile as a document in Supermemory.
-
-    Returns the document ID, or None if the SDK isn't configured.
-    """
+    """Add a scholar profile as a document in Supermemory."""
     if not memory:
         return None
 
@@ -83,7 +144,7 @@ async def add_scholar_to_memory(
         f"Affiliation: {affiliation}\n"
         f"Research topics: {', '.join(topics)}"
     )
-    result = memory.documents.create(
+    result = memory.documents.add(
         content=content,
         container_tag=container_tag,
         custom_id=scholar_id,
@@ -97,8 +158,7 @@ async def add_session_context(
     scholar_names: list[str],
     scholar_topics: list[list[str]],
 ) -> str | None:
-    """Add session context (handpicked scholars) as a document so the
-    Memory Router can retrieve it during chat."""
+    """Add session context (handpicked scholars) as a document."""
     if not memory:
         return None
 
@@ -106,7 +166,7 @@ async def add_session_context(
     for name, topics in zip(scholar_names, scholar_topics):
         lines.append(f"  - {name}: {', '.join(topics)}")
 
-    result = memory.documents.create(
+    result = memory.documents.add(
         content="\n".join(lines),
         container_tag=f"session-{session_id}",
         metadata={"type": "session", "session_id": session_id},
@@ -119,8 +179,8 @@ async def search_memories(query: str, limit: int = 5) -> list[dict]:
     if not memory:
         return []
 
-    result = memory.search.documents(q=query)
+    result = memory.search.execute(q=query, limit=limit)
     return [
-        {"content": r.content, "score": r.score}
-        for r in (result.results or [])[:limit]
+        {"content": r.content or "", "score": r.score, "title": r.title}
+        for r in (result.results or [])
     ]
