@@ -20,4 +20,6 @@ async def match_scholars(req: MatchRequest):
             scholars = [s for s in scholars if s.country == req.geo_filter.country]
         if req.geo_filter.state:
             scholars = [s for s in scholars if s.state == req.geo_filter.state]
+        if req.geo_filter.university:
+            scholars = [s for s in scholars if s.university == req.geo_filter.university]
     return MatchResponse(scholars=scholars[: req.top_k], query=req.query)

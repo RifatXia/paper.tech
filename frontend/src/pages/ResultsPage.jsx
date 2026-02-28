@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import SearchBar from "../components/SearchBar";
 import GeoFilter from "../components/GeoFilter";
 import ScholarCard from "../components/ScholarCard";
@@ -12,25 +12,29 @@ const TABS = ["Results", "Chat", "Graph"];
 
 export default function ResultsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { state: navState } = useLocation();
   const query = searchParams.get("q") || "";
 
   const [scholars, setScholars] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [geoFilter, setGeoFilter] = useState({
-    country: null,
-    state: null,
-    city: null,
-    university: null,
-  });
+  const [geoFilter, setGeoFilter] = useState(
+    navState?.geoFilter ?? { country: null, state: null, university: null }
+  );
   const [handpicked, setHandpicked] = useState([]);
   const [sessionId, setSessionId] = useState(null);
   const [activeTab, setActiveTab] = useState("Results");
 
-  const doSearch = async (q, geo = geoFilter) => {
+  const filteredScholars = scholars.filter((s) => {
+    if (geoFilter.country && s.country !== geoFilter.country) return false;
+    if (geoFilter.state && s.state !== geoFilter.state) return false;
+    if (geoFilter.university && s.university !== geoFilter.university) return false;
+    return true;
+  });
+
+  const doSearch = async (q) => {
     setLoading(true);
     try {
-      const hasGeo = Object.values(geo).some(Boolean);
-      const res = await matchScholars(q, 10, hasGeo ? geo : null);
+      const res = await matchScholars(q, 10, null);
       setScholars(res.scholars);
     } catch {
       setScholars([]);
@@ -70,7 +74,9 @@ export default function ResultsPage() {
         {/* Search + filter */}
         <div className="max-w-3xl mx-auto mb-6 space-y-3">
           <SearchBar onSearch={handleSearch} initialQuery={query} />
-          <GeoFilter filter={geoFilter} onChange={(f) => { setGeoFilter(f); if (query) doSearch(query, f); }} />
+          <div className="flex justify-center">
+            <GeoFilter filter={geoFilter} onChange={setGeoFilter} scholars={scholars} />
+          </div>
         </div>
 
         {/* Tabs */}
@@ -95,10 +101,10 @@ export default function ResultsPage() {
           {activeTab === "Results" && (
             <div className="space-y-4">
               {loading && <p className="text-gray-500 text-center py-8">Searching...</p>}
-              {!loading && scholars.length === 0 && query && (
+              {!loading && filteredScholars.length === 0 && query && (
                 <p className="text-gray-500 text-center py-8">No results found.</p>
               )}
-              {scholars.map((s) => (
+              {filteredScholars.map((s) => (
                 <ScholarCard
                   key={s.scholar_id}
                   scholar={s}
