@@ -1,5 +1,8 @@
 """Modal app — deploys Qwen3 (vLLM) and MiniLM embeddings as HTTPS endpoints.
 
+Uses Modal Volumes to cache model weights — first deploy downloads them once,
+subsequent cold starts load from the volume instead of re-downloading.
+
 Usage:
     cd backend
     uv run modal setup                  # one-time auth (opens browser)
@@ -12,9 +15,17 @@ Then add the printed URLs to your root .env:
 
 import modal
 
-# ── Modal app + images ─────────────────────────────────────────
+# ── Modal app + volumes ────────────────────────────────────────
 
 app = modal.App("paper-tech")
+
+# Persistent volume for HuggingFace model weights cache.
+# First cold start downloads weights here; all future cold starts
+# load from the volume (~seconds instead of ~minutes).
+hf_cache_vol = modal.Volume.from_name("paper-tech-hf-cache", create_if_missing=True)
+HF_CACHE_DIR = "/root/.cache/huggingface"
+
+# ── Images ─────────────────────────────────────────────────────
 
 vllm_image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -42,6 +53,7 @@ EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
     gpu=LLM_GPU,
     timeout=300,
     scaledown_window=120,
+    volumes={HF_CACHE_DIR: hf_cache_vol},
 )
 @modal.concurrent(max_inputs=10)
 class LLMServer:
@@ -53,6 +65,9 @@ class LLMServer:
             trust_remote_code=True,
             enable_prefix_caching=True,
         )
+        # Commit any newly downloaded weights to the volume so
+        # the next cold start doesn't re-download them.
+        hf_cache_vol.commit()
 
     @modal.fastapi_endpoint(method="POST", docs=True)
     def v1_chat_completions(self, request: dict):
@@ -101,12 +116,14 @@ class LLMServer:
     gpu="T4",
     timeout=120,
     scaledown_window=120,
+    volumes={HF_CACHE_DIR: hf_cache_vol},
 )
 class EmbedServer:
     @modal.enter()
     def load_model(self):
         from sentence_transformers import SentenceTransformer
         self.model = SentenceTransformer(EMBED_MODEL)
+        hf_cache_vol.commit()
 
     @modal.fastapi_endpoint(method="POST", docs=True)
     def embed(self, request: dict):
