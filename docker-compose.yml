@@ -1,0 +1,11 @@
+services:
+  vectoraidb:
+    image: williamimoh/actian-vectorai-db:1.0b
+    platform: linux/amd64
+    container_name: vectoraidb
+    ports:
+      - "127.0.0.1:50051:50051"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    command: /usr/local/actianvectorai/bin/vdss-grpc-server
