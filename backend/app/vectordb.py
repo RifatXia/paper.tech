@@ -9,16 +9,13 @@ import json
 import logging
 from pathlib import Path
 
-import networkx as nx
-from sentence_transformers import SentenceTransformer
-
 from app.config import settings
 
 log = logging.getLogger(__name__)
 
 # ── Lazy globals ─────────────────────────────────────────────────
-_model: SentenceTransformer | None = None
-_citation_graph: nx.Graph | None = None
+_model = None
+_citation_graph = None
 
 SERVER = settings.actian_db_url or "127.0.0.1:50051"
 
@@ -28,24 +25,34 @@ BETA = 0.6   # Cosine (semantic similarity)
 GAMMA = 0.2  # BibCoupling (citation graph)
 
 
-def _get_model() -> SentenceTransformer:
+def _get_model():
     global _model
     if _model is None:
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
+        try:
+            from sentence_transformers import SentenceTransformer
+            _model = SentenceTransformer("all-MiniLM-L6-v2")
+        except ImportError:
+            log.warning("sentence-transformers not available, vector search disabled")
+            return None
     return _model
 
 
-def _get_citation_graph() -> nx.Graph:
+def _get_citation_graph():
     global _citation_graph
     if _citation_graph is None:
-        _citation_graph = nx.Graph()
-        edges_path = Path(__file__).parent.parent / "db-scripts" / "data" / "co_citation_edges.json"
         try:
-            edges = json.loads(edges_path.read_text())
-            for e in edges:
-                _citation_graph.add_edge(e["scholar_a"], e["scholar_b"], weight=e["weight"])
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
+            import networkx as nx
+            _citation_graph = nx.Graph()
+            edges_path = Path(__file__).parent.parent / "db-scripts" / "data" / "co_citation_edges.json"
+            try:
+                edges = json.loads(edges_path.read_text())
+                for e in edges:
+                    _citation_graph.add_edge(e["scholar_a"], e["scholar_b"], weight=e["weight"])
+            except (FileNotFoundError, json.JSONDecodeError):
+                pass
+        except ImportError:
+            log.warning("networkx not available, citation graph disabled")
+            return None
     return _citation_graph
 
 
@@ -61,6 +68,8 @@ def _jaccard(topics_a: list[str], topics_b: list[str]) -> float:
 
 def _bibcoupling(scholar_a: str, scholar_b: str) -> float:
     G = _get_citation_graph()
+    if G is None:
+        return 0.0
     if G.has_edge(scholar_a, scholar_b):
         return float(G[scholar_a][scholar_b].get("weight", 0.0))
     return 0.0
@@ -84,8 +93,11 @@ def search_scholars(
         log.warning("cortex SDK not installed, falling back to mock data")
         return None
 
+    model = _get_model()
+    if model is None:
+        return None
+
     try:
-        model = _get_model()
         query_vector = model.encode(query_text).tolist()
 
         with CortexClient(SERVER) as client:
@@ -152,12 +164,10 @@ def list_all_scholars(limit: int = 100) -> list[dict] | None:
 
     try:
         with CortexClient(SERVER) as client:
-            # Scroll through all scholars
             count = client.count("scholars")
             if count == 0:
                 return None
 
-            # Use a zero-vector search with high top_k to retrieve all
             dummy_vector = [0.0] * 384
             results = client.search("scholars", query=dummy_vector, top_k=min(count, limit))
 
