@@ -3,12 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import match, scholars, handpick, chat, graph, ideas
+from app.routes.email import router as email_router
 
 app = FastAPI(
     title="paper.tech API",
     description="AI-powered co-author discovery and multi-scholar collaboration",
     version="0.1.0",
 )
+
+app.include_router(email_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
