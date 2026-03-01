@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { generateEmail } from "../api/client";
 
 export default function EmailDraftPage() {
   const location = useLocation();
@@ -10,6 +11,25 @@ export default function EmailDraftPage() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!scholar) return;
+    setLoading(true);
+    generateEmail(
+      scholar.name,
+      scholar.affiliation,
+      scholar.topics || [],
+      scholar.h_index || 0,
+      scholar.paper_count || 0
+    )
+      .then((data) => {
+        setSubject(data.subject);
+        setBody(data.body);
+      })
+      .catch((err) => console.error("Email generation failed:", err))
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleCopy = () => {
     const text = `To: ${to}\nSubject: ${subject}\n\n${body}`;
