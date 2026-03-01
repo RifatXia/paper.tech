@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     environment: str = "development"
 
-    model_config = {"env_file": ["../.env", ".env"], "extra": "ignore"}
+    model_config = {"env_file": [".env", "../.env"], "extra": "ignore"}
 
 
 settings = Settings()
