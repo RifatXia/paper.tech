@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["app", "paper_tech_backend"]
+packages = ["app"]
 
 [build-system]
 requires = ["hatchling"]
