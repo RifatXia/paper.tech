@@ -1,50 +1,10 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { chat } from "../api/client";
-
-const SpeechRecognition = typeof window !== "undefined"
-  ? window.SpeechRecognition || window.webkitSpeechRecognition
-  : null;
 
 export default function ChatPanel({ sessionId }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [listening, setListening] = useState(false);
-  const recognitionRef = useRef(null);
-
-  const toggleListening = () => {
-    if (!SpeechRecognition) return;
-
-    if (listening) {
-      recognitionRef.current?.stop();
-      setListening(false);
-      return;
-    }
-
-    if (!recognitionRef.current) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = "en-US";
-      recognition.onresult = (event) => {
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            transcript += event.results[i][0].transcript;
-          }
-        }
-        if (transcript) {
-          setInput((prev) => (prev ? prev + " " : "") + transcript.trim());
-        }
-      };
-      recognition.onend = () => setListening(false);
-      recognition.onerror = () => setListening(false);
-      recognitionRef.current = recognition;
-    }
-
-    recognitionRef.current.start();
-    setListening(true);
-  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -109,25 +69,6 @@ export default function ChatPanel({ sessionId }) {
             disabled={!sessionId}
             className="flex-1 px-4 py-2 bg-dark-surface border border-dark-border rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 disabled:opacity-50"
           />
-          {SpeechRecognition && (
-            <button
-              type="button"
-              onClick={toggleListening}
-              disabled={!sessionId}
-              className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
-                listening
-                  ? "bg-cyan-500/20 text-cyan-400 border border-cyan-400 animate-pulse"
-                  : "bg-dark-surface text-gray-400 border border-dark-border hover:text-cyan-400 hover:border-cyan-500/50"
-              }`}
-              title={listening ? "Stop listening" : "Speech to text"}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="22" />
-              </svg>
-            </button>
-          )}
           <button
             type="submit"
             disabled={!sessionId || loading}
