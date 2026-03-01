@@ -10,6 +10,7 @@ from app.models.schemas import (
 )
 from app.mock_data import MOCK_CHAT_REPLIES, MOCK_SCHOLARS
 from app.supermemory import call_llm
+from app.vectordb import list_all_scholars
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +30,22 @@ SCHOLAR_SYSTEM_PROMPT = (
     "Answer questions about the scholar's research based on their "
     "published work and topics. Be specific and cite their work."
 )
+
+
+def _find_scholar(scholar_id: str):
+    """Look up a scholar by ID — try Actian DB first, then mock data."""
+    db_scholars = list_all_scholars(limit=500)
+    if db_scholars:
+        for s in db_scholars:
+            if s.get("scholar_id") == scholar_id:
+                return s
+    # Fallback to mock
+    for s in MOCK_SCHOLARS:
+        if s.scholar_id == scholar_id:
+            return {"name": s.name, "affiliation": s.affiliation,
+                    "topics": s.topics, "h_index": s.h_index,
+                    "paper_count": s.paper_count}
+    return None
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -61,16 +78,17 @@ async def chat(req: ChatRequest):
 @router.post("/ask-scholar", response_model=AskScholarResponse)
 async def ask_scholar(req: AskScholarRequest):
     """Ask a question about a specific scholar's research (RAG)."""
-    scholar = next((s for s in MOCK_SCHOLARS if s.scholar_id == req.scholar_id), None)
-    name = scholar.name if scholar else "this scholar"
+    scholar = _find_scholar(req.scholar_id)
+    name = scholar.get("name", "this scholar") if scholar else "this scholar"
+    topics = scholar.get("topics", []) if scholar else []
 
     if scholar:
         try:
             context = (
-                f"Scholar: {scholar.name}\n"
-                f"Affiliation: {scholar.affiliation}\n"
-                f"Topics: {', '.join(scholar.topics)}\n"
-                f"h-index: {scholar.h_index}, papers: {scholar.paper_count}"
+                f"Scholar: {name}\n"
+                f"Affiliation: {scholar.get('affiliation', '')}\n"
+                f"Topics: {', '.join(topics)}\n"
+                f"h-index: {scholar.get('h_index', 0)}, papers: {scholar.get('paper_count', 0)}"
             )
             reply = await call_llm(
                 messages=[
@@ -88,9 +106,9 @@ async def ask_scholar(req: AskScholarRequest):
     return AskScholarResponse(
         answer=(
             f"Based on {name}'s published work, their research focuses on "
-            f"{', '.join(scholar.topics) if scholar else 'various topics'}. "
+            f"{', '.join(topics) if topics else 'various topics'}. "
             f"Their most cited contribution involves novel approaches to "
-            f"{scholar.topics[0] if scholar and scholar.topics else 'their field'}. "
+            f"{topics[0] if topics else 'their field'}. "
             f"Would you like to know more about a specific paper?"
         ),
         scholar_id=req.scholar_id,
