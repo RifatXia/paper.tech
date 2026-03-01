@@ -97,7 +97,7 @@ async def call_llm(
         "temperature": temperature,
     }
 
-    async with httpx.AsyncClient(timeout=300) as client:
+    async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
         resp = await client.post(
             settings.modal_llm_endpoint,
             json=payload,

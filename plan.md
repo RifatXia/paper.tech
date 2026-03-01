@@ -411,6 +411,56 @@ Each handpicked scholar group → unique `session_id`. Supermemory stores the fu
 
 ---
 
+## Multi-Turn Conversation Benchmark
+
+We run a controlled experiment comparing multi-turn conversation quality across 5 setups to demonstrate the value of our Supermemory + Modal pipeline. The experiment uses a scripted 10-turn research collaboration conversation where later turns deliberately reference facts established in earlier turns.
+
+### Setups Compared
+
+| Setup | Description |
+|---|---|
+| **GPT-4o-mini** | OpenAI API — commercial baseline with built-in context window |
+| **Gemini 2.0 Flash** | Google API — another commercial baseline for comparison |
+| **Qwen3-4B (no memory)** | Our base model on Modal — each turn sent independently, no prior context |
+| **Qwen3-4B (full history)** | Our model on Modal — naive approach, full conversation history stuffed into every prompt |
+| **Qwen3-4B + Supermemory** | Our actual pipeline — Supermemory retrieves only relevant context per turn, stores exchanges for future recall |
+
+### Metrics
+
+1. **Context Recall Accuracy (CRA)** — At turns 4, 7, and 10, we ask questions that require specific information from earlier turns (e.g., "Which scholar did we discuss who works on KV caches?" when that was mentioned at turn 2). A judge LLM (GPT-4o) scores each answer 0/1 for correctness. CRA = correct answers / total recall questions. This measures whether the system retains and retrieves relevant context across a long conversation.
+
+2. **Turn Latency (ms)** — Wall-clock time from request sent to response received, measured at turns 1, 4, 7, and 10. This shows how latency scales as conversation history grows — full-history approaches degrade as context length increases, while Supermemory should stay flat since it retrieves only relevant chunks.
+
+### Experiment Design
+
+- **Conversation script**: 10 turns simulating a researcher exploring co-author matches, handpicking scholars, and asking follow-up questions that reference prior turns
+- **3 recall probe questions** embedded at turns 4, 7, 10 — each requires a specific fact from an earlier turn to answer correctly
+- **Judge**: GPT-4o scores recall answers for correctness (binary 0/1)
+- **Runs**: 3 runs per setup, results averaged to reduce variance
+- **Infrastructure**: All experiments run on Modal (except GPT/Gemini which use their APIs). Results saved to `backend/benchmark_results.json`
+
+### Running the Benchmark
+
+```bash
+cd backend
+# Requires OPENAI_API_KEY and GOOGLE_API_KEY in .env for GPT/Gemini baselines
+uv run python benchmark.py
+```
+
+### Expected Outcome
+
+| Setup | CRA (expected) | Latency trend |
+|---|---|---|
+| GPT-4o-mini | ~0.9 | Moderate, scales with context |
+| Gemini 2.0 Flash | ~0.85 | Moderate, scales with context |
+| Qwen3-4B (no memory) | ~0.0 | Flat (no context to process) |
+| Qwen3-4B (full history) | ~0.7 | Grows linearly with turn count |
+| Qwen3-4B + Supermemory | ~0.8 | Flat (only relevant context retrieved) |
+
+The "no memory" setup should score near-zero on recall — proving context management is essential. Full history should work but with growing latency. Our Supermemory setup should match or approach commercial APIs on recall while maintaining flat latency.
+
+---
+
 ## Future Roadmap
 
 - Expand to 10,000+ scholars via continuous OpenAlex ingestion

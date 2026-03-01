@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     modal_llm_endpoint: str = ""
     modal_embed_endpoint: str = ""
     openalex_email: str = ""
+    openai_api_key: str = ""
+    github_token: str = ""
+    google_api_key: str = ""
+    groq_api_key: str = ""
     frontend_url: str = "http://localhost:5173"
     environment: str = "development"
 

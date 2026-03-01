@@ -1,0 +1,102 @@
+{
+  "GPT-4o-mini": {
+    "context_recall_accuracy": 1.0,
+    "per_probe_recall": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "avg_latencies_ms": {
+      "turn_1": 1817.8,
+      "turn_4": 951.1,
+      "turn_7": 1504.2,
+      "turn_10": 764.8
+    },
+    "num_runs": 1,
+    "sample_replies": {
+      "turn_4": "Dr. Amara Osei has an h-index of 42 and is affiliated with MIT CSAIL.",
+      "turn_7": "1. **Dr. Amara Osei**  \n   - **University**: MIT CSAIL  \n   - **Research Focus**: KV cache eviction policies\n\n2. **Prof. Liang Chen**  \n   - **University**: Stanford NLP Group  \n   - **Research Focus**: Efficient transformers and long-context models\n\n3. **Dr. Sofia Rodriguez**  \n   - **University**:",
+      "turn_10": "Prof. Liang Chen has an h-index of 58 and has published 134 papers. Dr. Sofia Rodriguez has an h-index of 35."
+    }
+  },
+  "Gemini 2.5 Flash": {
+    "context_recall_accuracy": 1.0,
+    "per_probe_recall": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "avg_latencies_ms": {
+      "turn_1": 1817.2,
+      "turn_4": 719.5,
+      "turn_7": 1020.8,
+      "turn_10": 924.2
+    },
+    "num_runs": 1,
+    "sample_replies": {
+      "turn_4": "Dr. Amara Osei has an h-index of 42 and is affiliated with MIT CSAIL.",
+      "turn_7": "Here are the three scholars discussed:\n\n*   **Dr. Amara Osei:** MIT CSAIL; KV cache eviction policies.\n*   **Prof. Liang Chen:** Stanford NLP Group; efficient transformers and long-context models.\n*   **Dr. Sofia Rodriguez:** CMU LTI; model compression, quantization, and edge deployment.",
+      "turn_10": "*   **Prof. Liang Chen** has an h-index of 58 and has published 134 papers.\n*   **Dr. Sofia Rodriguez** has an h-index of 35."
+    }
+  },
+  "Qwen3-4B (no memory)": {
+    "context_recall_accuracy": 0.0,
+    "per_probe_recall": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "avg_latencies_ms": {
+      "turn_1": 7854.7,
+      "turn_4": 3441.6,
+      "turn_7": 4765.9,
+      "turn_10": 5081.7
+    },
+    "num_runs": 1,
+    "sample_replies": {
+      "turn_4": "Dr. Osei has an h-index of 12, as cited in the conversation, and she is affiliated with the University of Ghana.",
+      "turn_7": "1. **Dr. Elena Martinez** (Stanford University) \u2013 focuses on **AI ethics** and **machine learning fairness**.  \n2. **Dr. Rajesh Kumar** (MIT) \u2013 specializes in **quantum computing** and **cryptography**.  \n3. **Dr. Laura Chen** (UC Berkeley) \u2013 studies **climate change** and **sustainable policy**.",
+      "turn_10": "I currently don\u2019t have access to real-time or specific author metrics like h-indices or publication counts. For accurate information, you\u2019d need to check academic databases (e.g., Google Scholar, ResearchGate, or institutional repositories). If you provide more context about their research areas or "
+    }
+  },
+  "Qwen3-4B (full history)": {
+    "context_recall_accuracy": 1.0,
+    "per_probe_recall": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "avg_latencies_ms": {
+      "turn_1": 8314.6,
+      "turn_4": 4317.1,
+      "turn_7": 6123.5,
+      "turn_10": 5713.0
+    },
+    "num_runs": 1,
+    "sample_replies": {
+      "turn_4": "Dr. Amara Osei has an **h-index of 42** and is affiliated with **MIT CSAIL** (Massachusetts Institute of Technology, Center for Speech and Language).",
+      "turn_7": "- **Dr. Amara Osei** (MIT CSAIL): Focuses on **KV cache eviction policies** and **memory-efficient LLM inference**.  \n- **Prof. Liang Chen** (Stanford NLP Group): Specializes in **efficient transformers** and **long-context modeling**.  \n- **Dr. Sofia Rodriguez** (CMU LTI): Expertise in **model comp",
+      "turn_10": "- **Prof. Liang Chen** has an **h-index of 58** and has published **134 papers**.  \n- **Dr. Sofia Rodriguez** has an **h-index of 35**.  \n\nThese metrics reflect their extensive contributions to **model efficiency**, **quantization**, and **LLM deployment**."
+    }
+  },
+  "Qwen3-4B + Supermemory": {
+    "context_recall_accuracy": 0.333,
+    "per_probe_recall": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "avg_latencies_ms": {
+      "turn_1": 4579.1,
+      "turn_4": 4573.4,
+      "turn_7": 20519.2,
+      "turn_10": 8879.8
+    },
+    "num_runs": 1,
+    "sample_replies": {
+      "turn_4": "Dr. Amara Osei has an **h-index of 42** and is affiliated with **MIT CSAIL**. Her research focuses on **KV cache eviction policies** and **memory-efficient inference**, aligning with her institutional emphasis on scalable AI systems.",
+      "turn_7": "",
+      "turn_10": "**Answer:**  \nAs an AI assistant, I cannot access real-time or specific academic metrics like h-indices or publication counts for Prof. Chen or Dr. Rodriguez. These details would require checking academic databases (e.g., Google Scholar, ResearchGate, or institutional profiles). If you have access t"
+    }
+  }
+}
