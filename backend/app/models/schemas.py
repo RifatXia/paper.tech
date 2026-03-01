@@ -80,6 +80,8 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     session_id: str
+    intent: str | None = None     # "deep_analysis" | "research_query" | "general_chat"
+    arxiv_id: str | None = None   # set when deep analysis is triggered
 
 
 class AskScholarRequest(BaseModel):
