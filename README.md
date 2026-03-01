@@ -9,6 +9,7 @@ Built for HackIllinois 2026.
 - **Node.js 18+** — [nodejs.org](https://nodejs.org)
 - **Python 3.11+** — [python.org](https://python.org)
 - **uv** — `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- **Docker** — for Actian VectorAI DB (optional, mock data works without it)
 
 ## Quick Start
 
@@ -31,9 +32,12 @@ Frontend (React + Vite)
     ▼  /api proxy
 FastAPI Backend
     │
-    ├── Short-term memory (in-memory sliding window)
-    ├── Long-term memory (Supermemory SDK)
-    └── LLM inference (Qwen3-4B on Modal GPU)
+    ├── Actian VectorAI DB ── scholar/paper embeddings, ANN search, geo filter
+    ├── Short-term memory ─── in-memory sliding window (last 6 exchanges)
+    ├── Long-term memory ──── Supermemory SDK (cross-session semantic recall)
+    ├── LLM inference ─────── Qwen3-4B on Modal GPU (chat, ideas, RAG)
+    ├── Email generation ──── Gemini 2.5 Flash (collaboration emails)
+    └── Data source ───────── OpenAlex API (250M+ papers, author metadata)
 ```
 
 ### Hybrid Memory Architecture
@@ -51,7 +55,17 @@ The chat system uses a two-layer memory approach:
 3. Both are assembled into the prompt sent to the LLM
 4. The exchange is stored in both layers (history cache + Supermemory)
 
-This ensures the LLM always has immediate conversational context (short-term) while also being able to recall information from earlier or past sessions (long-term).
+### Composite Scoring Engine
+
+Scholar matching uses a weighted composite score:
+
+```
+Score = 0.2 * Jaccard(topics) + 0.6 * Cosine(embeddings) + 0.2 * BibCoupling(citations)
+```
+
+- **Jaccard**: Topic keyword overlap between your query and the scholar's research areas
+- **Cosine**: Semantic similarity via ANN search on `all-MiniLM-L6-v2` embeddings in Actian VectorAI DB
+- **BibCoupling**: Co-citation graph edge weight from shared reference networks
 
 ## Manual Setup
 
@@ -71,34 +85,55 @@ npm install
 npm run dev
 ```
 
+### Actian VectorAI DB (optional)
+
+Start the vector database with Docker:
+
+```bash
+docker compose up -d vectoraidb
+```
+
+Then initialize schema and ingest data from OpenAlex:
+
+```bash
+cd backend/db-scripts
+python schema.py              # create collections
+python ingest.py              # fetch 500 scholars from OpenAlex, embed, store
+```
+
+When the DB is running, `/api/match` and `/api/scholars` automatically use real vector search. When unavailable, they fall back to mock data.
+
 ## Environment Variables
 
 All config lives in a single `.env` at the project root.
 
-| Variable | Description |
-|---|---|
-| `SUPERMEMORY_KEY` | Supermemory API key (long-term memory layer) |
-| `ACTIAN_DB_URL` | Actian VectorAI DB connection string |
-| `MODAL_LLM_ENDPOINT` | Modal Qwen3-4B inference URL |
-| `MODAL_EMBED_ENDPOINT` | Modal embedding function URL |
-| `GITHUB_TOKEN` | GitHub PAT for GPT-4o-mini via GitHub Models (benchmark) |
-| `GOOGLE_API_KEY` | Google API key for Gemini 2.5 Flash (benchmark) |
-| `GROQ_API_KEY` | Groq API key for Llama 3.3 70B judge (benchmark) |
-| `OPENALEX_EMAIL` | Email for OpenAlex API (polite pool) |
+| Variable | Description | Required |
+|---|---|---|
+| `SUPERMEMORY_KEY` | Supermemory API key (long-term memory layer) | For chat memory |
+| `ACTIAN_DB_URL` | Actian VectorAI DB address (default: `127.0.0.1:50051`) | For real vector search |
+| `MODAL_LLM_ENDPOINT` | Modal Qwen3-4B inference URL | For LLM chat/ideas |
+| `MODAL_EMBED_ENDPOINT` | Modal embedding function URL | For embeddings |
+| `GOOGLE_API_KEY` | Google API key for Gemini 2.5 Flash | For email generation |
+| `GITHUB_TOKEN` | GitHub PAT for GPT-4o-mini via GitHub Models | Benchmark only |
+| `GROQ_API_KEY` | Groq API key for Llama 3.3 70B judge | Benchmark only |
+| `OPENALEX_EMAIL` | Email for OpenAlex API (polite pool) | For data ingestion |
+| `FRONTEND_URL` | Allowed CORS origin (default: `http://localhost:5173`) | Production |
+| `ENVIRONMENT` | Deployment environment (default: `development`) | Production |
 
-All routes currently return mock data, so the app runs without any keys set.
+All routes have mock fallbacks, so the app runs without any keys set.
 
 ## API Routes
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/match` | Ranked co-author search |
-| GET | `/api/scholars` | List all scholars |
-| POST | `/api/handpick` | Create multi-scholar session |
-| POST | `/api/chat` | Chat in a session (hybrid memory) |
-| POST | `/api/ask-scholar` | Per-scholar RAG Q&A |
-| GET | `/api/graph-state` | Knowledge graph data |
-| POST | `/api/project-ideas` | Generate collaboration ideas |
+| POST | `/api/match` | Ranked co-author search (Actian VectorAI + composite scoring) |
+| GET | `/api/scholars` | List all scholars (Actian VectorAI or mock) |
+| POST | `/api/handpick` | Create multi-scholar session (stores in Supermemory) |
+| POST | `/api/chat` | Chat in a session (hybrid memory + Modal LLM) |
+| POST | `/api/ask-scholar` | Per-scholar RAG Q&A (Modal LLM) |
+| GET | `/api/graph-state` | Knowledge graph data for D3 visualization |
+| POST | `/api/project-ideas` | Generate collaboration ideas (Modal LLM) |
+| POST | `/api/generate_email` | Generate collaboration email (Gemini 2.5 Flash) |
 | GET | `/api/health` | Health check |
 
 ## Modal Deployment
@@ -107,7 +142,14 @@ Deploy the Qwen3-4B LLM and MiniLM embeddings to Modal:
 
 ```bash
 cd backend
+uv run modal setup              # one-time auth
 uv run modal deploy modal_app.py
+```
+
+Add the printed endpoint URLs to your `.env`:
+```
+MODAL_LLM_ENDPOINT=https://<username>--paper-tech-llmserver-v1-chat-completions.modal.run
+MODAL_EMBED_ENDPOINT=https://<username>--paper-tech-embedserver-embed.modal.run
 ```
 
 Features: A10G GPU, vLLM serving, GPU memory snapshots for fast cold starts, persistent HuggingFace cache volume.
@@ -136,6 +178,17 @@ uv run python -m benchmark.plots
 
 Results and plots saved to `backend/benchmark/results/`.
 
+## Aedify Deployment
+
+The backend includes a Dockerfile for deployment on [Aedify](https://aedify.ai):
+
+1. Connect the GitHub repo in the Aedify dashboard
+2. Set the root directory to `backend/`
+3. Add all environment variables from `.env`
+4. Deploy — Aedify will build from the Dockerfile and serve on a live URL
+
+The frontend can be deployed as a separate Aedify app with root directory `frontend/`.
+
 ## Branch Workflow
 
 1. Create a feature branch: `git checkout -b feature/your-feature`
@@ -144,13 +197,44 @@ Results and plots saved to `backend/benchmark/results/`.
 
 ## Adding Dependencies
 
-- **Backend**: `cd backend && uv add <package>`
+- **Backend**: `uv add <package>` (from project root)
 - **Frontend**: `cd frontend && npm install <package>`
 
 ## Sponsor Integrations
 
 | Sponsor | Integration | Files |
 |---|---|---|
-| **Supermemory** | Long-term semantic memory, document storage | `app/supermemory.py`, `routers/chat.py`, `routers/handpick.py` |
-| **Actian VectorAI DB** | Scholar embeddings & vector search | `routers/match.py`, `routers/scholars.py` |
-| **Modal** | Serverless GPU for Qwen3-4B & embeddings | `modal_app.py`, `app/supermemory.py` |
+| **Supermemory** | Long-term semantic memory, session context, document storage | `app/supermemory.py`, `routers/chat.py`, `routers/handpick.py` |
+| **Actian VectorAI DB** | Scholar/paper embeddings, ANN search, geo-filtered queries, composite scoring | `app/vectordb.py`, `routers/match.py`, `routers/scholars.py`, `db-scripts/` |
+| **Modal** | Serverless GPU for Qwen3-4B LLM + MiniLM embeddings | `modal_app.py`, `app/supermemory.py` |
+| **Aedify** | Full-stack deployment, GitHub auto-deploy, environment variable management | `backend/Dockerfile` |
+
+## Project Structure
+
+```
+paper.tech/
+├── frontend/                 # React + Vite SPA
+│   ├── src/
+│   │   ├── api/client.js     # Axios API client
+│   │   ├── components/       # ScholarCard, ChatPanel, GeoFilter, etc.
+│   │   └── pages/            # LandingPage, ResultsPage, EmailDraftPage
+│   └── vite.config.js        # /api proxy to backend
+├── backend/
+│   ├── app/
+│   │   ├── main.py           # FastAPI app, CORS, router registration
+│   │   ├── config.py         # Pydantic BaseSettings
+│   │   ├── vectordb.py       # Actian VectorAI DB client + composite scoring
+│   │   ├── supermemory.py    # Hybrid memory (short-term + Supermemory)
+│   │   ├── mock_data.py      # Dev fallback data
+│   │   ├── models/schemas.py # Pydantic request/response models
+│   │   ├── routers/          # match, scholars, handpick, chat, graph, ideas
+│   │   └── routes/email.py   # Email generation (Gemini 2.5 Flash)
+│   ├── db-scripts/           # Actian schema, OpenAlex ingest, scoring
+│   ├── benchmark/            # Multi-turn context retention benchmark
+│   ├── modal_app.py          # Modal deployment config
+│   └── Dockerfile            # Aedify deployment
+├── docker-compose.yml        # Actian VectorAI DB container
+├── pyproject.toml            # Python dependencies (uv)
+├── dev.sh                    # One-command startup
+└── .env                      # Environment variables (gitignored)
+```
