@@ -4,7 +4,7 @@ import random
 from fastapi import APIRouter
 
 from app.models.schemas import MatchRequest, MatchResponse, ScholarCard, ScoreBreakdown
-from app.mock_data import MOCK_SCHOLARS, FIELD_KEYWORDS, SCHOLAR_BY_ID
+from app.mock_data import MOCK_SCHOLARS, FIELD_KEYWORDS, SCHOLAR_BY_ID, SCHOLAR_CACHE
 from app.vectordb import search_scholars
 
 log = logging.getLogger(__name__)
@@ -128,9 +128,13 @@ async def match_scholars(req: MatchRequest):
                 match_explanation=f"Composite match: {bd['cosine']:.0%} semantic similarity, "
                     f"{bd['jaccard']:.0%} topic overlap.",
             ))
+        for s in scholars:
+            SCHOLAR_CACHE[s.scholar_id] = s
         return MatchResponse(scholars=scholars, query=req.query)
 
     # Fallback: smart keyword matching across 200 scholars
     log.info("Using keyword matching for /match (Actian DB unavailable)")
     scholars = _keyword_match(req.query, req.top_k, geo)
+    for s in scholars:
+        SCHOLAR_CACHE[s.scholar_id] = s
     return MatchResponse(scholars=scholars, query=req.query)

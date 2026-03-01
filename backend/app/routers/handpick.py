@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter
 
 from app.models.schemas import HandpickRequest, HandpickResponse
-from app.mock_data import MOCK_SCHOLARS, SCHOLAR_BY_ID
+from app.mock_data import SCHOLAR_BY_ID, SCHOLAR_CACHE
 from app.routers.chat import register_session
 from app.supermemory import add_session_context
 
@@ -14,7 +14,8 @@ router = APIRouter()
 async def handpick_scholars(req: HandpickRequest):
     """Create a multi-scholar research session from handpicked scholars."""
     session_id = str(uuid.uuid4())
-    picked = [SCHOLAR_BY_ID[sid] for sid in req.scholar_ids if sid in SCHOLAR_BY_ID]
+    picked = [SCHOLAR_CACHE.get(sid) or SCHOLAR_BY_ID.get(sid) for sid in req.scholar_ids]
+    picked = [s for s in picked if s is not None]
 
     # Register scholars with the chat router for smart responses
     register_session(session_id, req.scholar_ids)

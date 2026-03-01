@@ -360,6 +360,9 @@ MOCK_SCHOLARS: list[ScholarCard] = _build_scholars()
 # Build lookup for fast access by ID
 SCHOLAR_BY_ID: dict[str, ScholarCard] = {s.scholar_id: s for s in MOCK_SCHOLARS}
 
+# Shared cache — match.py writes here, handpick.py reads from here
+SCHOLAR_CACHE: dict[str, ScholarCard] = {}
+
 # ---------------------------------------------------------------------------
 # Topic keyword → scholar field mapping for intelligent search
 # ---------------------------------------------------------------------------
