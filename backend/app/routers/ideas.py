@@ -5,13 +5,11 @@ from fastapi import APIRouter
 
 from app.models.schemas import ProjectIdeasRequest, ProjectIdeasResponse, ProjectIdea
 from app.mock_data import MOCK_PROJECT_IDEAS
-from app.supermemory import get_chat_client
+from app.supermemory import call_llm
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
-
-DEFAULT_USER_ID = "paper-tech-user"
 
 IDEAS_SYSTEM_PROMPT = (
     "You are a research collaboration assistant. Given the scholars in this session, "
@@ -27,30 +25,25 @@ IDEAS_SYSTEM_PROMPT = (
 @router.post("/project-ideas", response_model=ProjectIdeasResponse)
 async def generate_project_ideas(req: ProjectIdeasRequest):
     """Generate collaboration project ideas for a handpicked scholar group."""
-    client = get_chat_client(
-        user_id=DEFAULT_USER_ID,
-        conversation_id=req.session_id,
-    )
-
-    if client:
-        try:
-            response = client.chat.completions.create(
-                model="Qwen/Qwen3-4B",
-                messages=[
-                    {"role": "system", "content": IDEAS_SYSTEM_PROMPT},
-                    {"role": "user", "content": "Generate project ideas for the scholars in this session."},
-                ],
-            )
-            raw = response.choices[0].message.content
+    try:
+        raw = await call_llm(
+            messages=[
+                {"role": "system", "content": IDEAS_SYSTEM_PROMPT},
+                {"role": "user", "content": "Generate project ideas for the scholars in this session."},
+            ],
+            session_id=req.session_id,
+        )
+        if raw:
             # Strip markdown code fences if present
-            if "```" in raw:
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            ideas_data = json.loads(raw)
+            text = raw
+            if "```" in text:
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            ideas_data = json.loads(text)
             ideas = [ProjectIdea(**idea) for idea in ideas_data]
             return ProjectIdeasResponse(ideas=ideas, session_id=req.session_id)
-        except Exception:
-            log.exception("Supermemory/LLM call failed for project-ideas, falling back to mock")
+    except Exception:
+        log.exception("LLM call failed for project-ideas, falling back to mock")
 
     return ProjectIdeasResponse(ideas=MOCK_PROJECT_IDEAS, session_id=req.session_id)

@@ -9,16 +9,12 @@ from app.models.schemas import (
     AskScholarResponse,
 )
 from app.mock_data import MOCK_CHAT_REPLIES, MOCK_SCHOLARS
-from app.supermemory import get_chat_client
+from app.supermemory import call_llm
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Default user ID — will come from auth once that's wired up
-DEFAULT_USER_ID = "paper-tech-user"
-
-# System prompt injected into every chat completion
 SYSTEM_PROMPT = (
     "You are a research collaboration assistant for paper.tech. "
     "You help researchers explore collaboration opportunities with the "
@@ -37,29 +33,19 @@ SCHOLAR_SYSTEM_PROMPT = (
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    """Send a message in a multi-scholar research session.
-
-    Routes through Supermemory Memory Router → Modal LLM when configured.
-    Falls back to mock replies otherwise.
-    """
-    client = get_chat_client(
-        user_id=DEFAULT_USER_ID,
-        conversation_id=req.session_id,
-    )
-
-    if client:
-        try:
-            response = client.chat.completions.create(
-                model="Qwen/Qwen3-4B",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": req.message},
-                ],
-            )
-            reply = response.choices[0].message.content
+    """Send a message in a multi-scholar research session."""
+    try:
+        reply = await call_llm(
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": req.message},
+            ],
+            session_id=req.session_id,
+        )
+        if reply:
             return ChatResponse(reply=reply, session_id=req.session_id)
-        except Exception:
-            log.exception("Supermemory/LLM call failed, falling back to mock")
+    except Exception:
+        log.exception("LLM call failed, falling back to mock")
 
     # Mock fallback
     msg_lower = req.message.lower()
@@ -74,20 +60,11 @@ async def chat(req: ChatRequest):
 
 @router.post("/ask-scholar", response_model=AskScholarResponse)
 async def ask_scholar(req: AskScholarRequest):
-    """Ask a question about a specific scholar's research (RAG).
-
-    Uses a per-scholar conversation_id so Supermemory tracks context
-    separately for each scholar Q&A panel.
-    """
+    """Ask a question about a specific scholar's research (RAG)."""
     scholar = next((s for s in MOCK_SCHOLARS if s.scholar_id == req.scholar_id), None)
     name = scholar.name if scholar else "this scholar"
 
-    client = get_chat_client(
-        user_id=DEFAULT_USER_ID,
-        conversation_id=f"scholar-{req.scholar_id}",
-    )
-
-    if client and scholar:
+    if scholar:
         try:
             context = (
                 f"Scholar: {scholar.name}\n"
@@ -95,19 +72,17 @@ async def ask_scholar(req: AskScholarRequest):
                 f"Topics: {', '.join(scholar.topics)}\n"
                 f"h-index: {scholar.h_index}, papers: {scholar.paper_count}"
             )
-            response = client.chat.completions.create(
-                model="Qwen/Qwen3-4B",
+            reply = await call_llm(
                 messages=[
                     {"role": "system", "content": f"{SCHOLAR_SYSTEM_PROMPT}\n\n{context}"},
                     {"role": "user", "content": req.question},
                 ],
+                session_id=f"scholar-{req.scholar_id}",
             )
-            return AskScholarResponse(
-                answer=response.choices[0].message.content,
-                scholar_id=req.scholar_id,
-            )
+            if reply:
+                return AskScholarResponse(answer=reply, scholar_id=req.scholar_id)
         except Exception:
-            log.exception("Supermemory/LLM call failed for ask-scholar, falling back to mock")
+            log.exception("LLM call failed for ask-scholar, falling back to mock")
 
     # Mock fallback
     return AskScholarResponse(
