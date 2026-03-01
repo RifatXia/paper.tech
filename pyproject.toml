@@ -1,5 +1,5 @@
 [project]
-name = "paper-tech-backend"
+name = "paper_tech_backend"
 version = "0.1.0"
 description = "paper.tech — AI-powered co-author discovery API"
 requires-python = ">=3.11"
