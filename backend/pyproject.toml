@@ -19,11 +19,8 @@ dependencies = [
     "matplotlib>=3.8",
 ]
 
-[project.scripts]
-start = "uvicorn app.main:app --host 0.0.0.0 --port 8000"
-
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = ["app", "paper_tech_backend"]
 
 [build-system]
 requires = ["hatchling"]
