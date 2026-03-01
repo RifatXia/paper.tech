@@ -1,4 +1,7 @@
+import { useNavigate } from "react-router-dom";
+
 export default function HandpickSidebar({ scholars, onStartSession, sessionId }) {
+  const navigate = useNavigate();
   if (scholars.length === 0) return null;
 
   return (
@@ -14,6 +17,12 @@ export default function HandpickSidebar({ scholars, onStartSession, sessionId })
           >
             <p className="text-sm font-medium text-gray-200">{s.name}</p>
             <p className="text-xs text-gray-500">{s.affiliation}</p>
+            <button
+              onClick={() => navigate("/email", { state: { scholar: s } })}
+              className="mt-2 w-full py-1.5 text-xs font-medium text-cyan-400 border border-cyan-400/30 hover:bg-cyan-400/10 rounded-md transition-colors"
+            >
+              Send email
+            </button>
           </div>
         ))}
       </div>
