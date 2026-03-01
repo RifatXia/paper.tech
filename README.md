@@ -4,6 +4,9 @@ AI-powered co-author discovery platform. Describe your research, get ranked coll
 
 Built for HackIllinois 2026.
 
+Hosted in: https://papertech-a30fb500.aedify.ai/ 
+.tech domain name: http://pap3r.tech/ 
+
 ## Prerequisites
 
 - **Node.js 18+** — [nodejs.org](https://nodejs.org)
