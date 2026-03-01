@@ -165,7 +165,6 @@
 
 """
 Modal vLLM Server — Optimized for Fast Startup
-================================================
 Key optimizations:
   1. Model weights baked INTO the container image (no runtime download)
   2. Minimum 1 container always warm (no cold starts)
