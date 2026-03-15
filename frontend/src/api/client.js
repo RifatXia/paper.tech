@@ -54,15 +54,4 @@ export async function getProjectIdeas(sessionId) {
   return data;
 }
 
-export async function generateEmail(scholarName, affiliation, topics, hIndex = 0, paperCount = 0) {
-  const { data } = await api.post("/api/generate_email", {
-    scholar_name: scholarName,
-    affiliation,
-    topics,
-    h_index: hIndex,
-    paper_count: paperCount,
-  });
-  return data;
-}
-
 export default api;
